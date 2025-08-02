@@ -1,0 +1,76 @@
+import os
+import time
+import json
+import shutil
+import hashlib
+from pathlib import Path
+from fortnite_replay_parser import Replay
+
+# --- Configuration ---
+REPLAY_SOURCE_DIR = os.path.expandvars(r"%localappdata%\\FortniteGame\\Saved\\Demos")
+DATABASE_DIR = Path("database/replays/mygames")
+PARSED_OUTPUT_DIR = Path("database/ParsedReplays")
+PROCESSED_FILE = Path("processed_replays.json")
+SCAN_INTERVAL_SECONDS = 10  # how often to check for new files
+
+# Ensure necessary directories exist
+DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+PARSED_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Keep track of processed replays
+if PROCESSED_FILE.exists():
+    with open(PROCESSED_FILE, "r") as f:
+        processed = set(json.load(f).get("processed", []))
+else:
+    processed = set()
+
+print(f"👀 Watching for replays in: {REPLAY_SOURCE_DIR}")
+print(f"📁 Saving raw replays to: {DATABASE_DIR}")
+print(f"📁 Saving parsed data to: {PARSED_OUTPUT_DIR}")
+print(f"✅ {len(processed)} replay(s) already processed.")
+
+def compute_file_hash(filepath):
+    """Return a short hash of the file to avoid reprocessing."""
+    h = hashlib.sha1()
+    with open(filepath, 'rb') as f:
+        while chunk := f.read(8192):
+            h.update(chunk)
+    return h.hexdigest()
+
+while True:
+    try:
+        for replay_file in Path(REPLAY_SOURCE_DIR).glob("*.replay"):
+            file_hash = compute_file_hash(replay_file)
+            if replay_file.name in processed:
+                continue
+
+            # Move to database folder
+            safe_name = f"{file_hash[:8]}_{replay_file.name}"
+            dst_path = DATABASE_DIR / safe_name
+            shutil.copy2(replay_file, dst_path)
+            print(f"✅ New replay copied: {replay_file.name} -> {safe_name}")
+
+            # Parse replay
+            try:
+                replay = Replay(str(replay_file))
+                replay.parse()
+                out_file = PARSED_OUTPUT_DIR / f"{replay_file.stem}.json"
+                with open(out_file, "w", encoding="utf-8") as f:
+                    json.dump(replay.to_dict(), f, indent=2)
+                print(f"📊 Parsed and saved to {out_file}")
+            except Exception as e:
+                print(f"❌ Failed to parse {replay_file.name}: {e}")
+                continue
+
+            processed.add(replay_file.name)
+            with open(PROCESSED_FILE, "w") as f:
+                json.dump({"processed": list(processed)}, f)
+
+        time.sleep(SCAN_INTERVAL_SECONDS)
+
+    except KeyboardInterrupt:
+        print("👋 Exiting replay watcher.")
+        break
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        time.sleep(5)
