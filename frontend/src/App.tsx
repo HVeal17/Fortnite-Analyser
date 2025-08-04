@@ -1,83 +1,77 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import './App.css';
+import React, { useState } from "react";
+import axios from "axios";
+import "./App.css";
 
-// Define the expected structure of the backend response
-type UploadResponse = {
-  results: string | {
-    edit_speed?: string;
-    eliminations?: number;
-    feedback?: string;
-  };
-};
-
-export default function UploadPage() {
+function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [link, setLink] = useState('');
+  const [feedback, setFeedback] = useState("");
+  const [summary, setSummary] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      setFile(e.target.files[0]);
+    }
+  };
 
   const handleUpload = async () => {
-    const formData = new FormData();
-    if (file) {
-      formData.append('video', file);
-    } else if (link) {
-      formData.append('link', link);
-    } else {
-      alert('Please upload a file or paste a link.');
-      return;
-    }
+  if (!file) return;
 
-    setLoading(true);
-    try {
-      const res = await axios.post<UploadResponse>('http://127.0.0.1:5000/upload', formData);
-      
-      // Convert result object to string if needed
-      const formatted =
-        typeof res.data.results === 'string'
-          ? res.data.results
-          : JSON.stringify(res.data.results, null, 2);
-          
-      setResult(formatted);
-    } catch (err) {
-      console.error('Upload failed:', err);
-      alert('Upload failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const formData = new FormData();
+  formData.append("file", file);
+  setLoading(true);
+
+  try {
+    const response = await axios.post<{
+      feedback: string;
+      summary: {
+        kills: number;
+        accuracy: number;
+        rotation_score: number;
+        positioning_score: number;
+        zone_safety: number;
+      };
+    }>("http://localhost:5000/upload", formData);
+
+    setFeedback(response.data.feedback);
+    setSummary(response.data.summary);
+  } catch (error: any) {
+    setFeedback("Upload failed. " + (error.response?.data?.error || ""));
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
-    <div className="upload-container">
-      <h1 className="upload-title">Fortnite Analyzer</h1>
+    <div className="app">
+      <h1>Fortnite Replay Uploader</h1>
+      <input type="file" accept=".replay" onChange={handleFileChange} />
+      <button onClick={handleUpload} disabled={!file || loading}>
+        {loading ? "Uploading..." : "Upload Replay"}
+      </button>
 
-      <div className="upload-box">
-        <label>Upload a video</label>
-        <input
-          type="file"
-          accept="video/*"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-        />
+      {feedback && (
+        <div className="feedback">
+          <h2>AI Feedback:</h2>
+          <pre>{feedback}</pre>
+        </div>
+      )}
 
-        <label>Or paste a VOD link</label>
-        <input
-          type="text"
-          placeholder="https://youtube.com/..."
-          value={link}
-          onChange={(e) => setLink(e.target.value)}
-        />
-
-        <button onClick={handleUpload} disabled={loading}>
-          {loading ? 'Uploading...' : 'Analyze'}
-        </button>
-
-        {result && (
-          <div className="result-box">
-            <h2>Analysis Result</h2>
-            <pre>{result}</pre>
-          </div>
-        )}
-      </div>
+      {summary && (
+        <div className="summary">
+          <h2>Match Summary</h2>
+          <ul>
+            <li>Kills: {summary.kills}</li>
+            <li>Accuracy: {summary.accuracy}%</li>
+            <li>Rotation Score: {summary.rotation_score}</li>
+            <li>Positioning Score: {summary.positioning_score}</li>
+            <li>Zone Safety: {summary.zone_safety} sec</li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
+
+export default App;

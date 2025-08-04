@@ -26,4 +26,14 @@
 # Ignore video and analysis folders at project root
 /videos/
 /ExtractedFrames/
-/Analysis/
+/backend-python/utils/AIAnalysis/feedback/.config.json
+/backend-python/database/
+/backend-python/training_data/
+/training_data/
+start.bat
+backend-python/utils/__pycache__/
+backend-python/utils/AIAnalysis/__pycache__/
+backend-python/utils/AIAnalysis/feedback/__pycache__/
+backend-python/utils/AIAnalysis/modules/__pycache__/
+/database/
+/.vscode/
